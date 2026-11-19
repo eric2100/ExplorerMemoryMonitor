@@ -2,15 +2,17 @@ param([switch]$CheckOnly)
 $ErrorActionPreference = 'Stop'
 $root = 'C:\ProgramData\ExplorerMemoryMonitor'
 $source = Join-Path $PSScriptRoot 'src'
-$files = @('tray.ps1','monitor.ps1','notify.ps1')
+$files = @('tray.ps1','monitor.ps1','notify.ps1','run-monitor.vbs')
 foreach ($file in $files) {
   $path = Join-Path $source $file
   if (!(Test-Path -LiteralPath $path)) { throw "Missing file: $path" }
-  $tokens = $null; $parseErrors = $null
-  [System.Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$parseErrors) | Out-Null
-  if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+  if ($file -like '*.ps1') {
+    $tokens = $null; $parseErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$parseErrors) | Out-Null
+    if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+  }
 }
-if ($CheckOnly) { Write-Host 'All source files are present and parse successfully.'; return }
+if ($CheckOnly) { Write-Host 'All source files are present; PowerShell scripts parse successfully.'; return }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($identity)
 if (!$principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run PowerShell as administrator, using the account that will use the tray.' }
@@ -32,7 +34,7 @@ foreach ($file in $files) {
   if ($LASTEXITCODE -ne 0) { throw "Unable to grant access to $file" }
 }
 $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-$action = New-ScheduledTaskAction -Execute $exe -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$root\monitor.ps1`""
+$action = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\wscript.exe') -Argument "//B `"$root\run-monitor.vbs`""
 $daily = New-ScheduledTaskTrigger -Daily -At 00:00
 $daily.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 1)).Repetition
 $user = "$env:USERDOMAIN\$env:USERNAME"

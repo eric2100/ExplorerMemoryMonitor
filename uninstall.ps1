@@ -15,6 +15,6 @@ foreach ($name in @('ExplorerMemoryMonitor','ExplorerMemoryTray')) {
   }
 }
 $root = 'C:\ProgramData\ExplorerMemoryMonitor'
-foreach ($file in @('tray.ps1','monitor.ps1','notify.ps1')) { Remove-Item -LiteralPath (Join-Path $root $file) -Force -ErrorAction SilentlyContinue }
+foreach ($file in @('tray.ps1','monitor.ps1','notify.ps1','run-monitor.vbs')) { Remove-Item -LiteralPath (Join-Path $root $file) -Force -ErrorAction SilentlyContinue }
 Write-Host 'Uninstalled.'
 Write-Host "Diagnostic captures and settings were preserved in $root and %LOCALAPPDATA%\ExplorerMemoryMonitor."
