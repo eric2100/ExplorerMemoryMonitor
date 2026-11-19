@@ -31,7 +31,7 @@ function Invoke-MemoryTrim([bool]$automatic) {
       } catch { continue }
     }
     $after = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
-    $message = '已整理 {0} 個程式的工作集。可用記憶體：{1:F1} → {2:F1} GB。' -f $count,($before / 1MB),($after / 1MB)
+    $message = '已整理 {0} 個程式的記憶體。可用記憶體：{1:F1} → {2:F1} GB。' -f $count,($before / 1MB),($after / 1MB)
     $title = if ($automatic) { '自動整理記憶體完成' } else { '記憶體整理完成' }
     $icon.ShowBalloonTip(10000, $title, $message, [System.Windows.Forms.ToolTipIcon]::Info)
   } catch {

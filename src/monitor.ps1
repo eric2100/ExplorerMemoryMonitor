@@ -22,7 +22,7 @@ try {
     $sample | Export-Csv -LiteralPath $log -NoTypeInformation -Append -Encoding UTF8
     $marker = Join-Path $base ("captured-{0}-{1}.txt" -f $p.Id,$start)
     if (($p.PrivateMemorySize64 -ge 2GB -and !(Test-Path $marker)) -or $TestSnapshot) {
-      if (!$TestSnapshot) { Send-MemoryAlert ("檔案總管私人記憶體已達 {0:N2} GB，正在保存診斷資料。" -f ($p.PrivateMemorySize64 / 1GB)) }
+      if (!$TestSnapshot) { Send-MemoryAlert ("檔案總管的私人記憶體已達 {0:N2} GB，正在保存診斷資料。" -f ($p.PrivateMemorySize64 / 1GB)) }
       $dir = Join-Path $base ("capture-{0}-{1}-{2}" -f $now.ToString('yyyyMMdd-HHmmss'),$p.Id,([guid]::NewGuid().ToString('N').Substring(0,8)))
       New-Item -ItemType Directory -Path $dir | Out-Null
       $sample | Format-List | Out-File (Join-Path $dir 'process.txt') -Encoding UTF8
