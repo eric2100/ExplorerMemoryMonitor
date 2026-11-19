@@ -75,14 +75,14 @@ $update = {
     $free = $os.FreePhysicalMemory / 1MB
     $total = $os.TotalVisibleMemorySize / 1MB
     $percent = [math]::Floor(100 * $os.FreePhysicalMemory / $os.TotalVisibleMemorySize)
-    $label = '{0:F0}' -f $percent
+    $label = '{0:F0}%' -f $percent
     $icon.Text = '可用記憶體：{0}%（{1:F1} / {2:F1} GB）' -f $percent,$free,$total
     $status.Text = $icon.Text
     $bmp = New-Object System.Drawing.Bitmap 32,32
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $bg = if ($free -lt 1) { [System.Drawing.Color]::DarkRed } elseif ($free -lt 2) { [System.Drawing.Color]::DarkOrange } else { [System.Drawing.Color]::DarkGreen }
     $g.Clear($bg)
-    $fontSize = if ($label.Length -ge 3) { 14 } elseif ($label.Length -eq 2) { 19 } else { 23 }
+    $fontSize = if ($label.Length -ge 4) { 9 } elseif ($label.Length -eq 3) { 12 } else { 15 }
     $font = New-Object System.Drawing.Font('Arial', $fontSize, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
     $fmt = New-Object System.Drawing.StringFormat
     $fmt.Alignment = [System.Drawing.StringAlignment]::Center
