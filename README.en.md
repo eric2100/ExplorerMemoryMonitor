@@ -1,4 +1,4 @@
-# Explorer Memory Monitor 0.1.2
+# Explorer Memory Monitor 0.1.3
 
 **Windows memory monitoring and Explorer diagnostics** · [繁體中文](README.md)
 
@@ -12,7 +12,7 @@ This diagram illustrates the workflow; it is not a screenshot.
 
 | Feature | Default behavior |
 | --- | --- |
-| Tray icon | Updates about every 10 seconds; the number is available physical memory in GB, rounded down. Hover for the precise value and total. Orange below 2 GB, red below 1 GB. |
+| Tray icon | Updates about every 10 seconds; the number is the percentage of physical memory available, rounded down. Hover for the percentage and capacity. Orange below 2 GB, red below 1 GB. |
 | Manual trim | Right-click **釋放記憶體** to trim eligible processes in the current user session with at least 100 MB in their working set. |
 | Automatic trim | On by default below 2 GB available physical memory. Trims at most three eligible processes, at least 30 minutes apart; excludes the foreground process and selected Windows shell processes. Toggle in the tray menu. |
 | Start at sign-in | On by default for the current account. Toggle **登入 Windows 時啟動** in the tray menu. This does not control the diagnostic task. |
@@ -25,7 +25,7 @@ Windows already manages memory. Trimming can temporarily increase the available 
 
 Requires Windows 10/11, Windows PowerShell 5.1, an interactive desktop session and administrator access on the account that will use the app. This version uses `C:\ProgramData`. Development testing was performed on Windows 11; other versions have not been fully validated.
 
-1. Download `ExplorerMemoryMonitor-0.1.2.zip` from [Releases](../../releases), or download the complete source ZIP, and extract it.
+1. Download `ExplorerMemoryMonitor-0.1.3.zip` from [Releases](../../releases), or download the complete source ZIP, and extract it.
 2. Sign in to the intended user account and right-click `install.cmd` → **Run as administrator**.
 3. Find the numeric icon in the notification area, including the hidden icons under `^`. Right-click for the controls.
 
@@ -58,7 +58,7 @@ The uninstaller closes the current account's tray app and removes startup regist
 - Missing icon: check hidden icons, Windows notification settings and the signed-in account.
 - Missing capture: inspect the `ExplorerMemoryMonitor` task's last result and `errors.log` or `dump-status.txt` in the data folder.
 - To disable automatic trimming, clear **自動釋放記憶體（低於 2 GB）** in the tray menu.
-- Version 0.1.2 is not a backup, recovery, medical, real-time or high-availability monitoring system.
+- Version 0.1.3 is not a backup, recovery, medical, real-time or high-availability monitoring system.
 
 ## License
 
