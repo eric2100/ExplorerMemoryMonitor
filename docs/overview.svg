@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="260" viewBox="0 0 960 260">
+<rect width="960" height="260" rx="20" fill="#101827"/>
+<text x="34" y="48" fill="#f8fafc" font-family="sans-serif" font-size="25" font-weight="bold">Explorer Memory Monitor · 0.1</text>
+<g font-family="sans-serif" font-size="16" fill="#e5e7eb">
+<rect x="30" y="80" width="270" height="135" rx="14" fill="#1f344b"/><text x="50" y="113" font-size="21" fill="#a7f3d0">1. Monitor</text><text x="50" y="145">Tray: available RAM</text><text x="50" y="173">Explorer: every 5 min</text>
+<rect x="345" y="80" width="270" height="135" rx="14" fill="#35314a"/><text x="365" y="113" font-size="21" fill="#fcd34d">2. Respond</text><text x="365" y="145">Notify and trim cautiously</text><text x="365" y="173">Auto trim: optional</text>
+<rect x="660" y="80" width="270" height="135" rx="14" fill="#3b2a37"/><text x="680" y="113" font-size="21" fill="#fda4af">3. Diagnose</text><text x="680" y="145">Save local snapshots</text><text x="680" y="173">Full dump may be sensitive</text>
+<text x="310" y="155" fill="#94a3b8" font-size="26">→</text><text x="625" y="155" fill="#94a3b8" font-size="26">→</text>
+</g></svg>
