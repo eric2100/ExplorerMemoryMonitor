@@ -1,4 +1,4 @@
-# Explorer Memory Monitor 0.1.4
+# Explorer Memory Monitor 0.1.5
 
 **Windows memory monitoring and Explorer diagnostics** · [繁體中文](README.md)
 
@@ -14,9 +14,10 @@ This diagram illustrates the workflow; it is not a screenshot.
 | --- | --- |
 | Tray icon | Updates about every 10 seconds; the number and % sign show the percentage of physical memory available, rounded down. Hover for the percentage and capacity. Orange below 2 GB, red below 1 GB. |
 | Manual trim | Right-click **釋放記憶體** to trim eligible processes in the current user session with at least 100 MB in their working set. |
-| Automatic trim | On by default below 2 GB available physical memory. Trims at most three eligible processes, at least 30 minutes apart; excludes the foreground process and selected Windows shell processes. Toggle in the tray menu. |
+| Automatic trim | On by default below 2 GB available physical memory. Runs once per low-memory episode, rearming after at least 2.5 GB remains available for five minutes, with at least 30 minutes between trims. Trims at most three eligible background processes and excludes selected Windows shell processes. Toggle in the tray menu. |
 | Start at sign-in | On by default for the current account. Toggle **登入 Windows 時啟動** in the tray menu. This does not control the diagnostic task. |
 | Explorer diagnostics | Samples every five minutes. At 2 GB of Explorer private memory, saves process, module and system information and attempts a full memory dump, once per Explorer process. |
+| Explorer automatic restart | After two checks at or above 4 GB of private memory, a successful dump and other safeguards, warns 15 seconds before restarting Explorer. Requires exactly one Explorer process in the current session and runs at most once per Windows boot. Toggle in the tray menu. |
 | Low-memory alert | Warns below 1 GB of available physical RAM, at most once every 30 minutes while it remains low. |
 
 Windows already manages memory. Trimming can temporarily increase the available figure but may cause data to be reloaded and performance to drop temporarily. It does not fix a memory leak or guarantee against crashes. The automatic operation does not terminate processes; the manual option has a broader scope. Windows notification settings can affect alerts.
@@ -25,7 +26,7 @@ Windows already manages memory. Trimming can temporarily increase the available 
 
 Requires Windows 10/11, Windows PowerShell 5.1, an interactive desktop session and administrator access on the account that will use the app. This version uses `C:\ProgramData`. Development testing was performed on Windows 11; other versions have not been fully validated.
 
-1. Download `ExplorerMemoryMonitor-0.1.4.zip` from [Releases](../../releases), or download the complete source ZIP, and extract it.
+1. Download `ExplorerMemoryMonitor-0.1.5.zip` from [Releases](../../releases), or download the complete source ZIP, and extract it.
 2. Sign in to the intended user account and right-click `install.cmd` → **Run as administrator**.
 3. Find the numeric icon in the notification area, including the hidden icons under `^`. Right-click for the controls.
 
@@ -58,7 +59,7 @@ The uninstaller closes the current account's tray app and removes startup regist
 - Missing icon: check hidden icons, Windows notification settings and the signed-in account.
 - Missing capture: inspect the `ExplorerMemoryMonitor` task's last result and `errors.log` or `dump-status.txt` in the data folder.
 - To disable automatic trimming, clear **自動釋放記憶體（低於 2 GB）** in the tray menu.
-- Version 0.1.4 is not a backup, recovery, medical, real-time or high-availability monitoring system.
+- Version 0.1.5 is not a backup, recovery, medical, real-time or high-availability monitoring system.
 
 ## License
 

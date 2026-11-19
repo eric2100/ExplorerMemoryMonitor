@@ -42,6 +42,17 @@ $settingsDir = Join-Path $env:LOCALAPPDATA 'ExplorerMemoryMonitor'
 New-Item -ItemType Directory -Force -Path $settingsDir | Out-Null
 $disabledFile = Join-Path $settingsDir 'auto-disabled'
 $cooldownFile = Join-Path $settingsDir 'last-auto-trim.txt'
+$pressureLatch = Join-Path $settingsDir 'low-memory-episode.txt'
+$recoveryMarker = Join-Path $settingsDir 'memory-recovery.txt'
+$restartDisabledFile = Join-Path $settingsDir 'auto-explorer-restart-disabled'
+$restartItem = $menu.Items.Add('檔案總管異常時自動重啟')
+$restartItem.Checked = !(Test-Path $restartDisabledFile)
+$restartItem.add_Click({
+  try {
+    if ($restartItem.Checked) { Set-Content -LiteralPath $restartDisabledFile -Value 'disabled'; $restartItem.Checked = $false }
+    else { Remove-Item -LiteralPath $restartDisabledFile -Force -ErrorAction Stop; $restartItem.Checked = $true }
+  } catch { $icon.ShowBalloonTip(10000, '設定失敗', $_.Exception.Message, [System.Windows.Forms.ToolTipIcon]::Warning) }
+})
 $autoItem = $menu.Items.Add('自動釋放記憶體（低於 2 GB）')
 $autoItem.Checked = !(Test-Path $disabledFile)
 $autoItem.add_Click({
@@ -75,32 +86,45 @@ $update = {
     $free = $os.FreePhysicalMemory / 1MB
     $total = $os.TotalVisibleMemorySize / 1MB
     $percent = [math]::Floor(100 * $os.FreePhysicalMemory / $os.TotalVisibleMemorySize)
-    $label = '{0:F0}%' -f $percent
+    $label = '{0:F0}' -f $percent
     $icon.Text = '可用記憶體：{0}%（{1:F1} / {2:F1} GB）' -f $percent,$free,$total
     $status.Text = $icon.Text
     $bmp = New-Object System.Drawing.Bitmap 32,32
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $bg = if ($free -lt 1) { [System.Drawing.Color]::DarkRed } elseif ($free -lt 2) { [System.Drawing.Color]::DarkOrange } else { [System.Drawing.Color]::DarkGreen }
     $g.Clear($bg)
-    $fontSize = if ($label.Length -ge 4) { 9 } elseif ($label.Length -eq 3) { 12 } else { 15 }
+    $fontSize = if ($label.Length -ge 3) { 13 } elseif ($label.Length -eq 2) { 20 } else { 23 }
     $font = New-Object System.Drawing.Font('Arial', $fontSize, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-    $fmt = New-Object System.Drawing.StringFormat
-    $fmt.Alignment = [System.Drawing.StringAlignment]::Center
-    $fmt.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $g.DrawString($label, $font, [System.Drawing.Brushes]::White, (New-Object System.Drawing.RectangleF 0,0,32,32), $fmt)
+    $percentFont = New-Object System.Drawing.Font('Arial', 7, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+    $fmt = [System.Drawing.StringFormat]::GenericTypographic
+    $numberWidth = $g.MeasureString($label, $font, [int]32, $fmt).Width
+    $symbolWidth = $g.MeasureString('%', $percentFont, [int]32, $fmt).Width
+    $left = [Math]::Max(0, (32 - $numberWidth - $symbolWidth) / 2)
+    $g.DrawString($label, $font, [System.Drawing.Brushes]::White, [single]$left, [single]((32 - $font.GetHeight($g)) / 2), $fmt)
+    $g.DrawString('%', $percentFont, [System.Drawing.Brushes]::White, [single]($left + $numberWidth), [single]4, $fmt)
     $handle = $bmp.GetHicon()
     $newIcon = [System.Drawing.Icon]::FromHandle($handle).Clone()
     [TrayNative]::DestroyIcon($handle) | Out-Null
     $oldIcon = $icon.Icon
     $icon.Icon = $newIcon
     if ($oldIcon) { $oldIcon.Dispose() }
-    $g.Dispose(); $font.Dispose(); $fmt.Dispose(); $bmp.Dispose()
+    $g.Dispose(); $font.Dispose(); $percentFont.Dispose(); $fmt.Dispose(); $bmp.Dispose()
   } catch { ("{0} {1}" -f (Get-Date).ToString('o'), $_) | Add-Content 'C:\ProgramData\ExplorerMemoryMonitor\tray-errors.log' }
 }
 $timer.Add_Tick({
   & $update
   try {
-    if ($autoItem.Checked -and (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory -lt 2MB -and (!(Test-Path $cooldownFile) -or ((Get-Date) - (Get-Item $cooldownFile).LastWriteTime).TotalMinutes -ge 30)) {
+    $availableKB = (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory
+    if (Test-Path $pressureLatch) {
+      if ($availableKB -ge 2.5MB) {
+        if (!(Test-Path $recoveryMarker)) { Set-Content -LiteralPath $recoveryMarker -Value (Get-Date).ToString('o') }
+        elseif (((Get-Date) - (Get-Item $recoveryMarker).LastWriteTime).TotalMinutes -ge 5) {
+          Remove-Item -LiteralPath $pressureLatch,$recoveryMarker -Force -ErrorAction Stop
+        }
+      } else { Remove-Item -LiteralPath $recoveryMarker -Force -ErrorAction SilentlyContinue }
+    }
+    if ($autoItem.Checked -and $availableKB -lt 2MB -and !(Test-Path $pressureLatch) -and (!(Test-Path $cooldownFile) -or ((Get-Date) - (Get-Item $cooldownFile).LastWriteTime).TotalMinutes -ge 30)) {
+      Set-Content -LiteralPath $pressureLatch -Value (Get-Date).ToString('o')
       Set-Content -LiteralPath $cooldownFile -Value (Get-Date).ToString('o')
       Invoke-MemoryTrim $true
       & $update

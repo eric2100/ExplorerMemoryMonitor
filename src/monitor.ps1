@@ -8,6 +8,9 @@ function Send-MemoryAlert([string]$message) {
   [IO.File]::WriteAllText($path, $message, [Text.Encoding]::UTF8)
   Start-Process -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -WindowStyle Hidden -ArgumentList "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\ProgramData\ExplorerMemoryMonitor\notify.ps1 -MessageFile $path" | Out-Null
 }
+function Test-ExplorerRestartReady([long]$privateBytes, [bool]$enabled, [bool]$dumpReady, [double]$highAgeMinutes, [double]$cooldownAgeMinutes, [bool]$sameSession, [bool]$oneExplorer) {
+  return ($privateBytes -ge 4GB -and $enabled -and $dumpReady -and $highAgeMinutes -ge 4 -and $highAgeMinutes -le 20 -and $cooldownAgeMinutes -ge 60 -and $sameSession -and $oneExplorer)
+}
 try {
   $os = Get-CimInstance Win32_OperatingSystem
   $lowMarker = Join-Path $base 'low-memory-alert.txt'
@@ -57,6 +60,40 @@ public static class ExplorerDump {
           'Full dump completed.' | Out-File (Join-Path $dir 'dump-status.txt')
         } catch { $_ | Out-String | Out-File (Join-Path $dir 'dump-status.txt'); Remove-Item (Join-Path $dir 'explorer-full.dmp') -Force -ErrorAction SilentlyContinue }
         $dir | Out-File $marker -Encoding UTF8
+      }
+    }
+    $disabledRestart = Join-Path $env:LOCALAPPDATA 'ExplorerMemoryMonitor\auto-explorer-restart-disabled'
+    $highMarker = Join-Path $base ("high-{0}-{1}.txt" -f $p.Id,$start)
+    $restartMarker = Join-Path $base 'last-explorer-restart.txt'
+    if ($p.PrivateMemorySize64 -lt 4GB -or (Test-Path $disabledRestart)) {
+      Remove-Item -LiteralPath $highMarker -Force -ErrorAction SilentlyContinue
+    } else {
+      if (!(Test-Path $highMarker)) { Set-Content -LiteralPath $highMarker -Value $now.ToString('o') }
+      $highAge = ($now - (Get-Item $highMarker).LastWriteTime).TotalMinutes
+      if ($highAge -gt 20) { Set-Content -LiteralPath $highMarker -Value $now.ToString('o'); $highAge = 0 }
+      $cooldownAge = if (Test-Path $restartMarker) { ($now - (Get-Item $restartMarker).LastWriteTime).TotalMinutes } else { 100000 }
+      $alreadyRestartedThisBoot = (Test-Path $restartMarker) -and ((Get-Item $restartMarker).LastWriteTime -ge $os.LastBootUpTime)
+      $dumpReady = $false
+      if (Test-Path $marker) {
+        $capture = (Get-Content -LiteralPath $marker -Raw).Trim()
+        $dumpPath = Join-Path $capture 'explorer-full.dmp'
+        $statusPath = Join-Path $capture 'dump-status.txt'
+        $dumpReady = (Test-Path -LiteralPath $dumpPath) -and (Test-Path -LiteralPath $statusPath) -and ((Get-Item -LiteralPath $dumpPath).Length -gt 0) -and ((Get-Content -LiteralPath $statusPath -Raw) -match 'Full dump completed')
+      }
+      $session = (Get-Process -Id $PID).SessionId
+      $sameSession = $p.SessionId -eq $session
+      $oneExplorer = @(Get-Process explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session }).Count -eq 1
+      if (!$alreadyRestartedThisBoot -and (Test-ExplorerRestartReady $p.PrivateMemorySize64 $true $dumpReady $highAge $cooldownAge $sameSession $oneExplorer)) {
+        Send-MemoryAlert '檔案總管記憶體持續超過 4 GB，診斷資料已保存，15 秒後將重新啟動檔案總管。'
+        Start-Sleep -Seconds 15
+        $current = Get-Process -Id $p.Id -ErrorAction SilentlyContinue
+        if ($current -and $current.ProcessName -eq 'explorer' -and $current.StartTime.ToUniversalTime().ToString('yyyyMMddHHmmss') -eq $start -and $current.PrivateMemorySize64 -ge 4GB -and !(Test-Path $disabledRestart)) {
+          Set-Content -LiteralPath $restartMarker -Value (Get-Date).ToString('o')
+          Stop-Process -Id $current.Id -Force -ErrorAction Stop
+          Start-Sleep -Seconds 3
+          if (!(Get-Process explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session })) { Start-Process explorer.exe }
+          Remove-Item -LiteralPath $highMarker -Force -ErrorAction SilentlyContinue
+        }
       }
     }
   }
