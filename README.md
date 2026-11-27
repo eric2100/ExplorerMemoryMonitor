@@ -1,4 +1,4 @@
-# Explorer Memory Monitor 0.3.0
+# Explorer Memory Monitor 0.4.0
 
 **Windows 記憶體監控與檔案總管診斷工具** · [English](README.en.md)
 
@@ -24,19 +24,13 @@ Windows 會自行管理記憶體。工作集整理可能暫時增加可用量，
 
 ## 安裝
 
-需求：64 位元 Windows 10／11、Windows PowerShell 5.1、.NET Framework 4.x 的 C# 編譯器、目前使用的帳戶具系統管理員權限；此版本使用 `C:\ProgramData` 路徑，並需要登入 Windows 桌面。開發測試環境是 Windows 11，尚未在其他 Windows 版本完整驗證。安裝時會編譯 C# 程式；日常系統匣和診斷排程不會開啟 PowerShell。
+需求：64 位元 Windows 10／11、.NET Framework 4.x、登入 Windows 桌面，以及目前使用的帳戶具系統管理員權限；此版本使用 `C:\ProgramData` 路徑。開發測試環境是 Windows 11，尚未在其他 Windows 版本完整驗證。安裝包包含已編譯的 C# 程式；原始碼需要使用 C# 編譯器自行編譯。
 
-1. 從 [Releases](../../releases) 下載 `ExplorerMemoryMonitor-0.3.0.zip` 並解壓縮，或下載整個專案原始碼 ZIP 並解壓縮。
-2. 以使用工具的帳戶登入，在解壓後的資料夾以右鍵選擇 **以系統管理員身分執行** `install.cmd`。
+1. 從 [Releases](../../releases) 下載 `ExplorerMemoryMonitor-0.4.0.zip` 並完整解壓縮。
+2. 以使用工具的系統管理員帳戶登入，執行 `MemorySetup.exe`，允許權限提示後選「安裝或更新」。三個 EXE 必須放在同一個資料夾。此安裝包未經數位簽章。
 3. 在工作列右下角找數字圖示；若沒有出現，點「^」查看隱藏的圖示。點一下圖示可開啟設定視窗；右鍵可快速切換設定或手動整理。
 
-也可在該資料夾開啟系統管理員 PowerShell：
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-```
-
-安裝會將 C# 程式放在 `%LOCALAPPDATA%\ExplorerMemoryMonitor`，將診斷資料放在 `C:\ProgramData\ExplorerMemoryMonitor`，並建立目前帳戶的登入啟動項目及 `ExplorerMemoryMonitor` 工作排程。排程只在設定的帳戶已登入時運作。重新安裝會更新程式及重設登入啟動項目；自動整理的停用設定會保留。
+安裝會將 C# 程式放在 `%LOCALAPPDATA%\ExplorerMemoryMonitor`，將診斷資料放在 `C:\ProgramData\ExplorerMemoryMonitor`，並建立目前帳戶的登入啟動項目及 `ExplorerMemoryMonitor` 工作排程。排程每 5 分鐘執行一次，僅在安裝帳戶登入時運作；安裝完成後會立即執行一次。更新會保留原有登入啟動與自動整理設定。
 
 ## 診斷資料與隱私
 
@@ -46,20 +40,31 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 ## 解除安裝
 
-以系統管理員身分執行 `uninstall.cmd`，或在系統管理員 PowerShell 執行：
+執行解壓後的 `MemorySetup.exe`，選「解除安裝」。解除安裝會關閉目前帳戶執行中的系統匣程式，移除啟動項目、排程和 C# 程式檔案，**保留診斷資料與使用者設定**。如不再需要傾印，請自行檢查後刪除資料夾。
+
+## 原始碼與自行編譯
+
+`src/MemoryTray.cs` 是系統匣與設定視窗；`src/MemoryMonitor.cs` 是排程與傾印功能；`src/MemorySetup.cs` 是安裝器。`*Tests.cs` 為測試程式。儲存庫不包含舊版 PowerShell、VBScript 或批次檔。
+
+更多程式分工、資料位置與測試方式見[程式與診斷資料](docs/architecture.md)。
+
+在專案資料夾開啟 PowerShell，使用 Windows 內建的 .NET Framework C# 編譯器：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
+$c = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+& $c /nologo /codepage:65001 /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /out:MemoryTray.exe src\MemoryTray.cs
+& $c /nologo /codepage:65001 /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /out:MemoryMonitor.exe src\MemoryMonitor.cs
+& $c /nologo /codepage:65001 /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /out:MemorySetup.exe src\MemorySetup.cs
 ```
 
-解除安裝會關閉目前帳戶執行中的系統匣程式，移除啟動項目、排程和程式檔案，**保留診斷資料與使用者設定**。如不再需要傾印，請自行檢查後刪除資料夾。
+將三個 EXE 放在同一資料夾，再執行 `MemorySetup.exe`。原始碼 ZIP 不含已編譯的 EXE；一般使用者請下載 Release 安裝包。
 
 ## 排查
 
 - 找不到圖示：查看「^」隱藏圖示、Windows 通知設定，並確認已登入安裝帳戶。
-- 沒有診斷：在工作排程器檢查 `ExplorerMemoryMonitor` 的上次執行結果；查看資料夾內 `errors.log` 或 `dump-status.txt`。
+- 沒有診斷：在工作排程器檢查 `ExplorerMemoryMonitor` 的上次執行結果；查看資料夾內 `monitor-csharp-errors.log` 或 `dump-status.txt`。
 - 不想自動整理：取消「自動整理占用偏高的閒置程式」。
-- 此工具是 0.3.0 版，並非醫療、即時或高可用性監控系統；不要將它當作備份或故障復原方案。
+- 此工具是 0.4.0 版，並非醫療、即時或高可用性監控系統；不要將它當作備份或故障復原方案。
 
 ## 授權
 

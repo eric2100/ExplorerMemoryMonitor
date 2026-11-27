@@ -1,4 +1,4 @@
-# Explorer Memory Monitor 0.3.0
+# Explorer Memory Monitor 0.4.0
 
 **Windows memory monitoring and Explorer diagnostics** · [繁體中文](README.md)
 
@@ -24,19 +24,13 @@ Windows already manages memory. Trimming can temporarily increase the available 
 
 ## Install
 
-Requires 64-bit Windows 10/11, Windows PowerShell 5.1, the .NET Framework 4.x C# compiler, an interactive desktop session and administrator access on the account that will use the app. This version uses `C:\ProgramData`. Development testing was performed on Windows 11; other versions have not been fully validated. Installation compiles the C# programs; the daily tray and scheduled monitor do not start PowerShell.
+Requires 64-bit Windows 10/11, .NET Framework 4.x, an interactive desktop session and administrator access on the account that will use the app. This version uses `C:\ProgramData`. Development testing was performed on Windows 11; other versions have not been fully validated. The release package includes compiled C# applications; building from source requires a C# compiler.
 
-1. Download `ExplorerMemoryMonitor-0.3.0.zip` from [Releases](../../releases), or download the complete source ZIP, and extract it.
-2. Sign in to the intended user account and right-click `install.cmd` → **Run as administrator**.
+1. Download and extract `ExplorerMemoryMonitor-0.4.0.zip` from [Releases](../../releases).
+2. Sign in to the intended administrator account, run `MemorySetup.exe`, approve the elevation prompt and choose install or update. Keep all three EXEs together. The binaries are not digitally signed.
 3. Find the numeric icon in the notification area, including the hidden icons under `^`. Click it to open settings or right-click for quick controls.
 
-Alternatively, run in an elevated PowerShell from the extracted folder:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
-```
-
-Installation places the C# programs in `%LOCALAPPDATA%\ExplorerMemoryMonitor`, stores diagnostics in `C:\ProgramData\ExplorerMemoryMonitor`, configures sign-in startup for the current account and registers the `ExplorerMemoryMonitor` scheduled task. The task runs only while that account is signed in. Reinstalling updates the programs and enables sign-in startup again; the automatic-trim preference is preserved.
+Installation places the C# programs in `%LOCALAPPDATA%\ExplorerMemoryMonitor`, stores diagnostics in `C:\ProgramData\ExplorerMemoryMonitor`, configures sign-in startup for the current account and registers the `ExplorerMemoryMonitor` scheduled task. It runs every five minutes while the account is signed in and once immediately after installation. Updating preserves existing sign-in startup and automatic-trim preferences.
 
 ## Diagnostics and privacy
 
@@ -46,20 +40,31 @@ The dump is skipped if the disk has less than 5 GB plus 2.5 times Explorer's pri
 
 ## Uninstall
 
-Run `uninstall.cmd` as administrator, or use an elevated PowerShell:
+Run the extracted `MemorySetup.exe` and choose uninstall. It closes the current account's tray app and removes startup registration, tasks and C# executables, but **preserves diagnostic data and user settings**. Review and delete retained data yourself if it is no longer needed.
+
+## Source and building
+
+`src/MemoryTray.cs` provides the tray and settings, `src/MemoryMonitor.cs` the scheduled diagnostics, and `src/MemorySetup.cs` the installer. The `*Tests.cs` files are tests. Legacy PowerShell, VBScript and batch files are not part of this repository.
+
+See [architecture and diagnostic data](docs/architecture.md) for implementation and test details (Traditional Chinese).
+
+From the project folder, use PowerShell and the .NET Framework C# compiler:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\uninstall.ps1
+$c = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+& $c /nologo /codepage:65001 /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /out:MemoryTray.exe src\MemoryTray.cs
+& $c /nologo /codepage:65001 /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /out:MemoryMonitor.exe src\MemoryMonitor.cs
+& $c /nologo /codepage:65001 /target:winexe /platform:x64 /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /out:MemorySetup.exe src\MemorySetup.cs
 ```
 
-The uninstaller closes the current account's tray app and removes startup registration, tasks and program scripts, but **preserves diagnostic data and user settings**. Review and delete retained data yourself if it is no longer needed.
+Keep the three EXEs together and run `MemorySetup.exe`. The source ZIP does not include compiled EXEs; use the Release package for installation.
 
 ## Troubleshooting
 
 - Missing icon: check hidden icons, Windows notification settings and the signed-in account.
-- Missing capture: inspect the `ExplorerMemoryMonitor` task's last result and `errors.log` or `dump-status.txt` in the data folder.
+- Missing capture: inspect the `ExplorerMemoryMonitor` task's last result and `monitor-csharp-errors.log` or `dump-status.txt` in the data folder.
 - To disable automatic trimming, clear **自動整理占用偏高的閒置程式**.
-- Version 0.3.0 is not a backup, recovery, medical, real-time or high-availability monitoring system.
+- Version 0.4.0 is not a backup, recovery, medical, real-time or high-availability monitoring system.
 
 ## License
 
