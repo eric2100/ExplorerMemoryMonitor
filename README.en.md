@@ -1,4 +1,4 @@
-# Explorer Memory Monitor 0.2.0
+# Explorer Memory Monitor 0.2.1
 
 **Windows memory monitoring and Explorer diagnostics** · [繁體中文](README.md)
 
@@ -14,7 +14,7 @@ This diagram illustrates the workflow; it is not a screenshot.
 | --- | --- |
 | Tray icon | Updates about every 15 seconds; the number and % sign show the percentage of physical memory available, rounded down. Hover for the percentage and capacity. Orange below 2 GB, red below 1 GB. |
 | Manual trim | Right-click **整理目前符合條件的閒置程式** to trim at most one process meeting the idle and once-per-process conditions below. |
-| Automatic idle trim | On by default. A visible-window process in the current user session must have a working set of at least 1 GB, have stayed out of the foreground for at least five minutes and averaged less than 1% of one CPU core. Browsers, Explorer and selected Windows components are excluded. Attempts at most once per process, at least 30 minutes apart. Toggle in the tray menu. |
+| Automatic idle trim | On by default. A visible-window process in the current user session must have a working set of at least 1 GB, have stayed out of the foreground for at least five minutes and averaged less than 1% of one CPU core. Below 2 GB available system memory, the threshold is 100 MB and only one attempt is made per low-memory episode; it rearms after 2.5 GB remains available for five minutes. Browsers, Explorer and selected Windows components are excluded. Attempts at most once per process, at least 30 minutes apart. Toggle in the tray menu. |
 | Start at sign-in | On by default for the current account. Toggle **登入 Windows 時啟動** in the tray menu. This does not control the diagnostic task. |
 | Explorer diagnostics | Samples every five minutes. At 2 GB of Explorer private memory, saves process, module and system information and attempts a full memory dump, once per Explorer process. |
 | Explorer automatic restart | After two checks at or above 4 GB of private memory, a successful dump and other safeguards, warns 15 seconds before restarting Explorer. Requires exactly one Explorer process in the current session and runs at most once per Windows boot. Toggle in the tray menu. |
@@ -26,7 +26,7 @@ Windows already manages memory. Trimming can temporarily increase the available 
 
 Requires 64-bit Windows 10/11, Windows PowerShell 5.1, the .NET Framework 4.x C# compiler, an interactive desktop session and administrator access on the account that will use the app. This version uses `C:\ProgramData`. Development testing was performed on Windows 11; other versions have not been fully validated. Installation compiles the C# programs; the daily tray and scheduled monitor do not start PowerShell.
 
-1. Download `ExplorerMemoryMonitor-0.2.0.zip` from [Releases](../../releases), or download the complete source ZIP, and extract it.
+1. Download `ExplorerMemoryMonitor-0.2.1.zip` from [Releases](../../releases), or download the complete source ZIP, and extract it.
 2. Sign in to the intended user account and right-click `install.cmd` → **Run as administrator**.
 3. Find the numeric icon in the notification area, including the hidden icons under `^`. Right-click for the controls.
 
@@ -59,7 +59,7 @@ The uninstaller closes the current account's tray app and removes startup regist
 - Missing icon: check hidden icons, Windows notification settings and the signed-in account.
 - Missing capture: inspect the `ExplorerMemoryMonitor` task's last result and `errors.log` or `dump-status.txt` in the data folder.
 - To disable automatic trimming, clear **閒置且占用過高時自動整理** in the tray menu.
-- Version 0.2.0 is not a backup, recovery, medical, real-time or high-availability monitoring system.
+- Version 0.2.1 is not a backup, recovery, medical, real-time or high-availability monitoring system.
 
 ## License
 

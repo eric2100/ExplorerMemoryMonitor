@@ -22,9 +22,11 @@ namespace ExplorerMemoryMonitor {
     }
   }
   static class TrimPolicy {
-    internal static bool Eligible(long workingSet, double observedSeconds, double foregroundSeconds, double cpuSeconds, bool completed, bool cooldownSatisfied) {
-      return workingSet >= 1024L*1024*1024 && observedSeconds >= 300 && foregroundSeconds >= 300 && cpuSeconds >= 0 && cpuSeconds / observedSeconds < 0.01 && !completed && cooldownSatisfied;
+    internal static bool Eligible(long workingSet, long threshold, double observedSeconds, double foregroundSeconds, double cpuSeconds, bool completed, bool cooldownSatisfied) {
+      return workingSet >= threshold && observedSeconds >= 300 && foregroundSeconds >= 300 && cpuSeconds >= 0 && cpuSeconds / observedSeconds < 0.01 && !completed && cooldownSatisfied;
     }
+    internal static bool AutomaticAllowed(bool pressure, bool latch, double minutesSinceAction) { return minutesSinceAction>=30 && (!pressure || !latch); }
+    internal static bool RecoveryComplete(double minutesAboveThreshold) { return minutesAboveThreshold>=5; }
   }
   sealed class TrayContext : ApplicationContext {
     [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Auto)] class MemoryStatus {
@@ -59,6 +61,8 @@ namespace ExplorerMemoryMonitor {
     string Disabled { get { return Path.Combine(config,"idle-trim-disabled"); } }
     string RestartDisabled { get { return Path.Combine(config,"auto-explorer-restart-disabled"); } }
     string ActionTime { get { return Path.Combine(config,"idle-trim-last.txt"); } }
+    string PressureLatch { get { return Path.Combine(config,"low-memory-episode.txt"); } }
+    string RecoveryMarker { get { return Path.Combine(config,"memory-recovery.txt"); } }
     string DoneDir { get { return Path.Combine(config,"idle-trim-completed"); } }
     public TrayContext() {
       Directory.CreateDirectory(config); Directory.CreateDirectory(DoneDir);
@@ -68,12 +72,12 @@ namespace ExplorerMemoryMonitor {
       restart.Click += delegate { Toggle(restart, RestartDisabled); };
       startup.Checked=IsStartup(); startup.Click += delegate { SetStartup(!startup.Checked); };
       menu.Items.Add(status); menu.Items.Add(automatic); menu.Items.Add(restart); menu.Items.Add(startup);
-      menu.Items.Add("整理目前符合條件的閒置程式", null, delegate { Scan(true); });
+      menu.Items.Add("整理目前符合條件的閒置程式", null, delegate { SafeScan(true); });
       menu.Items.Add("開啟工作管理員", null, delegate { Process.Start("taskmgr.exe"); });
       menu.Items.Add("開啟診斷資料夾", null, delegate { Process.Start("explorer.exe", root); });
       menu.Items.Add("結束顯示", null, delegate { ExitThread(); });
       icon.ContextMenuStrip=menu; icon.Visible=true;
-      timer.Interval=15000; timer.Tick += delegate { RefreshIcon(); Scan(false); };
+      timer.Interval=15000; timer.Tick += delegate { RefreshIcon(); SafeScan(false); };
       RefreshIcon(); timer.Start();
     }
     void Toggle(ToolStripMenuItem item, string path) {
@@ -102,10 +106,24 @@ namespace ExplorerMemoryMonitor {
       IntPtr token; if(!OpenProcessToken(process,8,out token)) return false;
       try { using(var id=new WindowsIdentity(token)) return currentUser.Equals(id.User); } finally { CloseHandle(token); }
     }
+    void SafeScan(bool manual) {
+      try { Scan(manual); } catch(Exception e) { try {File.AppendAllText(Path.Combine(config,"idle-trim-errors.log"),DateTime.Now.ToString("o")+" "+e.Message+Environment.NewLine);} catch {} if(manual) Notify("整理失敗",e.Message,ToolTipIcon.Warning); }
+    }
     void Scan(bool manual) {
       if(!manual && !automatic.Checked) return;
       bool acted=false;
       DateTime now=DateTime.UtcNow; uint foreground; GetWindowThreadProcessId(GetForegroundWindow(),out foreground);
+      bool pressure=false;
+      if(!manual) {
+        var memory=new MemoryStatus(); if(!GlobalMemoryStatusEx(memory)) return;
+        if(File.Exists(PressureLatch)) {
+          if(memory.availablePhysical >= (ulong)(2.5*GiB)) {
+            if(!File.Exists(RecoveryMarker)) File.WriteAllText(RecoveryMarker,now.ToString("o"));
+            else if(TrimPolicy.RecoveryComplete((now-File.GetLastWriteTimeUtc(RecoveryMarker)).TotalMinutes)) {File.Delete(PressureLatch);File.Delete(RecoveryMarker);}
+          } else if(File.Exists(RecoveryMarker)) File.Delete(RecoveryMarker);
+        }
+        pressure=memory.availablePhysical < (ulong)(2*GiB);
+      }
       var live=new HashSet<string>();
       foreach(var p in Process.GetProcesses()) using(p) {
         try {
@@ -118,14 +136,16 @@ namespace ExplorerMemoryMonitor {
           if(seconds<300 || (now-sample.LastForeground).TotalSeconds<300) continue;
           double cpuSeconds=(cpu-sample.Cpu).TotalSeconds;
           if(cpuSeconds<0 || cpuSeconds/seconds>=0.01) { sample.Since=now; sample.Cpu=cpu; continue; }
-          if(!TrimPolicy.Eligible(p.WorkingSet64,seconds,(now-sample.LastForeground).TotalSeconds,cpuSeconds,File.Exists(Path.Combine(DoneDir,key+".txt")),manual || (now-lastAction).TotalMinutes>=30)) continue;
+          long threshold=pressure ? 100*MiB : GiB;
+          bool cooldown=manual || TrimPolicy.AutomaticAllowed(pressure,File.Exists(PressureLatch),(now-lastAction).TotalMinutes);
+          if(!TrimPolicy.Eligible(p.WorkingSet64,threshold,seconds,(now-sample.LastForeground).TotalSeconds,cpuSeconds,File.Exists(Path.Combine(DoneDir,key+".txt")),cooldown)) continue;
           uint foregroundAgain; GetWindowThreadProcessId(GetForegroundWindow(),out foregroundAgain);
           if(p.Id==(int)foregroundAgain) continue;
           IntPtr h=OpenProcess(0x1500,false,p.Id); if(h==IntPtr.Zero) continue;
           bool succeeded=false;
-          try { if(SameOwner(h)) { File.WriteAllText(Path.Combine(DoneDir,key+".txt"),now.ToString("o")); File.WriteAllText(ActionTime,now.ToString("o")); lastAction=now; succeeded=EmptyWorkingSet(h); } }
+          try { if(SameOwner(h)) { if(pressure) File.WriteAllText(PressureLatch,now.ToString("o")); File.WriteAllText(Path.Combine(DoneDir,key+".txt"),now.ToString("o")); File.WriteAllText(ActionTime,now.ToString("o")); lastAction=now; succeeded=EmptyWorkingSet(h); } }
           finally { CloseHandle(h); }
-          if(succeeded) { acted=true; Notify("已整理閒置程式",p.ProcessName+" 閒置且記憶體占用超過 1 GB，已嘗試整理一次。",ToolTipIcon.Info); }
+          if(succeeded) { acted=true; Notify("已整理閒置程式",p.ProcessName+" 符合閒置及記憶體條件，已嘗試整理一次。",ToolTipIcon.Info); }
           if(succeeded || lastAction==now) break;
         } catch { }
       }
