@@ -44,18 +44,20 @@ namespace ExplorerMemoryMonitor {
     const long MiB=1024L*1024, GiB=1024L*1024*1024;
     static readonly HashSet<string> excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
       "explorer", "dwm", "csrss", "winlogon", "sihost", "taskhostw", "StartMenuExperienceHost", "SearchHost", "ShellExperienceHost", "msedge", "chrome", "firefox", "MemoryTray" };
-    readonly string config = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ExplorerMemoryMonitor");
+    readonly string config;
     readonly string root = @"C:\ProgramData\ExplorerMemoryMonitor";
     readonly SecurityIdentifier currentUser = WindowsIdentity.GetCurrent().User;
     readonly int session = Process.GetCurrentProcess().SessionId;
     readonly NotifyIcon icon = new NotifyIcon();
     readonly ContextMenuStrip menu = new ContextMenuStrip();
     readonly ToolStripMenuItem status = new ToolStripMenuItem("記憶體") { Enabled=false };
-    readonly ToolStripMenuItem automatic = new ToolStripMenuItem("閒置且占用過高時自動整理");
-    readonly ToolStripMenuItem restart = new ToolStripMenuItem("檔案總管異常時自動重啟");
+    readonly ToolStripMenuItem automatic = new ToolStripMenuItem("自動整理占用偏高的閒置程式");
+    readonly ToolStripMenuItem restart = new ToolStripMenuItem("檔案總管記憶體過高時自動重啟");
     readonly ToolStripMenuItem startup = new ToolStripMenuItem("登入 Windows 時啟動");
     readonly Timer timer = new Timer();
     readonly Dictionary<string, Sample> samples = new Dictionary<string, Sample>();
+    Form settingsWindow;
+    Label settingsMemory;
     DateTime lastAction = DateTime.MinValue;
     class Sample { public DateTime Since; public TimeSpan Cpu; public DateTime LastForeground; }
     string Disabled { get { return Path.Combine(config,"idle-trim-disabled"); } }
@@ -64,19 +66,26 @@ namespace ExplorerMemoryMonitor {
     string PressureLatch { get { return Path.Combine(config,"low-memory-episode.txt"); } }
     string RecoveryMarker { get { return Path.Combine(config,"memory-recovery.txt"); } }
     string DoneDir { get { return Path.Combine(config,"idle-trim-completed"); } }
-    public TrayContext() {
+    public TrayContext() : this(null) { }
+    internal TrayContext(string configOverride) {
+      config=configOverride ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ExplorerMemoryMonitor");
       Directory.CreateDirectory(config); Directory.CreateDirectory(DoneDir);
       if (File.Exists(ActionTime)) lastAction=File.GetLastWriteTimeUtc(ActionTime);
       automatic.Checked=!File.Exists(Disabled); restart.Checked=!File.Exists(RestartDisabled);
       automatic.Click += delegate { Toggle(automatic, Disabled); };
       restart.Click += delegate { Toggle(restart, RestartDisabled); };
       startup.Checked=IsStartup(); startup.Click += delegate { SetStartup(!startup.Checked); };
-      menu.Items.Add(status); menu.Items.Add(automatic); menu.Items.Add(restart); menu.Items.Add(startup);
-      menu.Items.Add("整理目前符合條件的閒置程式", null, delegate { SafeScan(true); });
+      menu.Items.Add(status);
+      menu.Items.Add("開啟設定", null, delegate { ShowSettings(); });
+      menu.Items.Add(new ToolStripSeparator());
+      menu.Items.Add(automatic); menu.Items.Add(restart); menu.Items.Add(startup);
+      menu.Items.Add(new ToolStripSeparator());
+      menu.Items.Add("立即整理符合條件的閒置程式", null, delegate { SafeScan(true); });
       menu.Items.Add("開啟工作管理員", null, delegate { Process.Start("taskmgr.exe"); });
       menu.Items.Add("開啟診斷資料夾", null, delegate { Process.Start("explorer.exe", root); });
-      menu.Items.Add("結束顯示", null, delegate { ExitThread(); });
+      menu.Items.Add("結束系統匣程式", null, delegate { ExitThread(); });
       icon.ContextMenuStrip=menu; icon.Visible=true;
+      icon.MouseClick += delegate(object sender, MouseEventArgs e) { if(e.Button==MouseButtons.Left) ShowSettings(); };
       timer.Interval=15000; timer.Tick += delegate { RefreshIcon(); SafeScan(false); };
       RefreshIcon(); timer.Start();
     }
@@ -90,11 +99,44 @@ namespace ExplorerMemoryMonitor {
       catch(Exception e) { Notify("設定失敗",e.Message,ToolTipIcon.Warning); }
     }
     void Notify(string title, string message, ToolTipIcon kind) { icon.ShowBalloonTip(10000,title,message,kind); }
+    internal void ShowSettings() {
+      if(settingsWindow!=null && !settingsWindow.IsDisposed) { settingsWindow.Show(); settingsWindow.Activate(); return; }
+      var form=new Form { Text="記憶體監控", ClientSize=new Size(480,540), MinimumSize=new Size(420,500), StartPosition=FormStartPosition.CenterScreen, BackColor=Color.FromArgb(246,248,250), Font=new Font("Microsoft JhengHei",10f), ShowInTaskbar=true };
+      settingsWindow=form;
+      var layout=new TableLayoutPanel { Dock=DockStyle.Fill, Padding=new Padding(24,20,24,18), ColumnCount=1, RowCount=8, AutoScroll=true };
+      layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+      layout.RowStyles.Add(new RowStyle(SizeType.Absolute,40)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute,62)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute,45));
+      layout.RowStyles.Add(new RowStyle(SizeType.Absolute,52)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute,52)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute,52)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute,82)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute,62));
+      var title=new Label { Text="記憶體監控", Dock=DockStyle.Fill, Font=new Font("Microsoft JhengHei",17f,FontStyle.Bold), ForeColor=Color.FromArgb(21,36,50), TextAlign=ContentAlignment.MiddleLeft };
+      settingsMemory=new Label { Text=icon.Text, Dock=DockStyle.Fill, Font=new Font("Microsoft JhengHei",14f,FontStyle.Bold), ForeColor=Color.FromArgb(20,83,74), TextAlign=ContentAlignment.MiddleLeft, AccessibleName="目前可用記憶體" };
+      var hint=new Label { Text="數值約每 15 秒更新。整理可能只暫時增加可用記憶體。", Dock=DockStyle.Fill, ForeColor=Color.FromArgb(63,78,91), TextAlign=ContentAlignment.MiddleLeft };
+      layout.Controls.Add(title,0,0); layout.Controls.Add(settingsMemory,0,1); layout.Controls.Add(hint,0,2);
+      AddSetting(layout,3,automatic); AddSetting(layout,4,restart); AddSetting(layout,5,startup);
+      var actions=new FlowLayoutPanel { Dock=DockStyle.Fill, FlowDirection=FlowDirection.LeftToRight, WrapContents=true, Padding=new Padding(0,12,0,0) };
+      var clean=new Button { Text="立即整理符合條件的閒置程式", AutoSize=true, MinimumSize=new Size(230,40), BackColor=Color.FromArgb(23,92,79), ForeColor=Color.White, FlatStyle=FlatStyle.Flat };
+      clean.FlatAppearance.BorderSize=0; clean.Click += delegate { SafeScan(true); };
+      var folder=new Button { Text="開啟診斷資料夾", AutoSize=true, MinimumSize=new Size(145,40), FlatStyle=FlatStyle.System };
+      folder.Click += delegate { Process.Start("explorer.exe",root); }; actions.Controls.Add(clean); actions.Controls.Add(folder); layout.Controls.Add(actions,0,6);
+      var foot=new Label { Text="關閉這個視窗後，程式會繼續在工作列執行。", Dock=DockStyle.Fill, ForeColor=Color.FromArgb(63,78,91), TextAlign=ContentAlignment.MiddleLeft };
+      layout.Controls.Add(foot,0,7); form.Controls.Add(layout);
+      form.FormClosed += delegate { settingsWindow=null; settingsMemory=null; };
+      form.Show();
+    }
+    void AddSetting(TableLayoutPanel layout, int row, ToolStripMenuItem item) {
+      var check=new CheckBox { Text=item.Text, Checked=item.Checked, AutoSize=false, Dock=DockStyle.Fill, ForeColor=Color.FromArgb(21,36,50), UseVisualStyleBackColor=true };
+      bool updating=false;
+      check.CheckedChanged += delegate { if(updating || check.Checked==item.Checked) return; item.PerformClick(); updating=true; check.Checked=item.Checked; updating=false; };
+      EventHandler sync = delegate { if(check.IsDisposed) return; updating=true; check.Checked=item.Checked; updating=false; };
+      item.CheckedChanged += sync;
+      check.Disposed += delegate { item.CheckedChanged -= sync; };
+      layout.Controls.Add(check,0,row);
+    }
     void RefreshIcon() {
       var m=new MemoryStatus(); if(!GlobalMemoryStatusEx(m) || m.totalPhysical==0) return;
       int percent=(int)(m.availablePhysical*100/m.totalPhysical);
       icon.Text=String.Format("可用記憶體：{0}%（{1:F1} / {2:F1} GB）",percent,(double)m.availablePhysical/GiB,(double)m.totalPhysical/GiB);
       status.Text=icon.Text;
+      if(settingsMemory!=null && !settingsMemory.IsDisposed) settingsMemory.Text=icon.Text;
       using(var bmp=new Bitmap(32,32)) using(var g=Graphics.FromImage(bmp)) using(var num=new Font("Arial",percent>=100?13:percent>=10?20:23,FontStyle.Bold,GraphicsUnit.Pixel)) using(var sign=new Font("Arial",7,FontStyle.Bold,GraphicsUnit.Pixel)) using(var fmt=(StringFormat)StringFormat.GenericTypographic.Clone()) {
         g.Clear(m.availablePhysical<(ulong)GiB?Color.DarkRed:m.availablePhysical<(ulong)(2*GiB)?Color.DarkOrange:Color.DarkGreen);
         string value=percent.ToString(); float w=g.MeasureString(value,num,32,fmt).Width, sw=g.MeasureString("%",sign,32,fmt).Width, x=Math.Max(0,(32-w-sw)/2);
@@ -145,12 +187,12 @@ namespace ExplorerMemoryMonitor {
           bool succeeded=false;
           try { if(SameOwner(h)) { if(pressure) File.WriteAllText(PressureLatch,now.ToString("o")); File.WriteAllText(Path.Combine(DoneDir,key+".txt"),now.ToString("o")); File.WriteAllText(ActionTime,now.ToString("o")); lastAction=now; succeeded=EmptyWorkingSet(h); } }
           finally { CloseHandle(h); }
-          if(succeeded) { acted=true; Notify("已整理閒置程式",p.ProcessName+" 符合閒置及記憶體條件，已嘗試整理一次。",ToolTipIcon.Info); }
+          if(succeeded) { acted=true; Notify("已整理閒置程式",p.ProcessName+" 符合整理條件，已嘗試整理一次。",ToolTipIcon.Info); }
           if(succeeded || lastAction==now) break;
         } catch { }
       }
       var stale=new List<string>(); foreach(var pair in samples) if(!live.Contains(pair.Key)) stale.Add(pair.Key); foreach(var key in stale) samples.Remove(key);
-      if(manual && !acted) Notify("沒有需要整理的程式","目前沒有符合閒置及記憶體條件的程式。",ToolTipIcon.Info);
+      if(manual && !acted) Notify("沒有符合條件的程式","程式需要符合閒置時間與記憶體條件，才會進行整理。",ToolTipIcon.Info);
     }
     protected override void ExitThreadCore() { timer.Stop(); timer.Dispose(); icon.Visible=false; if(icon.Icon!=null) icon.Icon.Dispose(); icon.Dispose(); menu.Dispose(); base.ExitThreadCore(); }
   }
